@@ -77,21 +77,35 @@ app.post("/api/uploads/presign", async (req, res) => {
   try {
     const filename = str(req.body?.filename);
     const contentType = str(req.body?.contentType);
-    if (!filename) return res.status(400).json({ error: "filename is required." });
+    console.log(`[uploads] presign request: filename="${filename}", contentType="${contentType}"`);
+
+    if (!filename) {
+      console.log("[uploads] presign validation failed: filename is required");
+      return res.status(400).json({ error: "filename is required." });
+    }
 
     const ext = extOf(filename);
     if (!ALLOWED_EXT.includes(ext) && !ALLOWED_MIME.includes(contentType)) {
+      console.log(`[uploads] presign validation failed: disallowed extension "${ext}" or content type "${contentType}"`);
       return res.status(400).json({ error: "Resume must be a PDF, DOC, or DOCX file." });
     }
 
     // Sanitise the name and give each upload a unique prefix.
     const safeName = filename.replace(/[^\w.\-]+/g, "_").slice(-120);
     const objectKey = `resumes/${randomUUID()}/${safeName}`;
+    console.log(`[uploads] presign generated objectKey: ${objectKey}`);
+
+    console.log("[uploads] presign calling presignUpload...");
+    const start = Date.now();
     const url = await presignUpload(objectKey);
+    const duration = Date.now() - start;
+    console.log(`[uploads] presignUpload completed in ${duration}ms (url length=${url.length})`);
 
     res.json({ url, objectKey, expiresIn: config.presignExpirySeconds });
   } catch (err) {
+    const stack = err instanceof Error ? err.stack : undefined;
     console.error("[uploads] presign failed:", err);
+    if (stack) console.error("[uploads] presign error stack:", stack);
     res.status(500).json({ error: "Could not create upload URL." });
   }
 });

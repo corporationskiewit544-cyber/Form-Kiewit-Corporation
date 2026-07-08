@@ -27,6 +27,10 @@ const publicClient = new Client({
   region: REGION,
 });
 
+console.log(
+  `[minio] public presign client configured: endpoint=${config.minio.public.endPoint}, port=${config.minio.public.port}, useSSL=${config.minio.public.useSSL}, region=${REGION}, bucket=${BUCKET}`,
+);
+
 /** Ensure the bucket exists. Retries so we survive MinIO booting slower than us in Docker. */
 export async function initMinio(retries = 15, delayMs = 2000): Promise<void> {
   for (let attempt = 1; attempt <= retries; attempt++) {
