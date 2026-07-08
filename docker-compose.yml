@@ -1,0 +1,52 @@
+services:
+  # S3-compatible object storage for resume files.
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # Web console -> http://localhost:9001
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+
+  # Express API: validates + stores submissions as JSON, resumes in MinIO.
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    environment:
+      PORT: "3001"
+      DATA_DIR: /data/submissions
+      MAX_UPLOAD_BYTES: "10485760"
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: "9000"
+      MINIO_USE_SSL: "false"
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-kiewit-resumes}
+    volumes:
+      - submissions-data:/data/submissions
+    depends_on:
+      - minio
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+
+  # Nginx: serves the built React SPA and reverse-proxies /api -> server.
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "3000:80" # App -> http://localhost:3000
+    depends_on:
+      - server
+    restart: unless-stopped
+
+volumes:
+  minio-data:
+  submissions-data:
