@@ -1,13 +1,18 @@
 import { randomUUID } from "node:crypto";
 import cors from "cors";
 import express from "express";
-import multer from "multer";
 import { config } from "./config.js";
-import { getResumeStream, initMinio, putResume, removeResume } from "./minio.js";
+import { initDb } from "./db.js";
+import {
+  initMinio,
+  presignDownload,
+  presignUpload,
+  removeResume,
+  statResume,
+} from "./minio.js";
 import {
   deleteSubmission,
   getSubmission,
-  initStorage,
   listSubmissions,
   saveSubmission,
 } from "./storage.js";
@@ -15,12 +20,7 @@ import type { Submission } from "./types.js";
 
 const app = express();
 app.use(cors());
-app.use(express.json());
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: config.maxUploadBytes },
-});
+app.use(express.json({ limit: "256kb" }));
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
@@ -32,6 +32,7 @@ const ALLOWED_MIME = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
 
+const extOf = (name: string) => name.toLowerCase().slice(name.lastIndexOf("."));
 const isUrl = (v: string) => {
   try {
     const u = new URL(v);
@@ -56,7 +57,7 @@ const REQUIRED_FIELDS = [
 ] as const;
 
 /** Server-side field validation mirroring the client. Returns { field: message }. */
-function validateFields(b: Record<string, string>): Record<string, string> {
+function validateFields(b: Record<string, unknown>): Record<string, string> {
   const errs: Record<string, string> = {};
   for (const f of REQUIRED_FIELDS) {
     if (!str(b[f])) errs[f] = "This field is required.";
@@ -73,10 +74,34 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-// --- Create an application ------------------------------------------------
-app.post("/api/applications", upload.single("resume"), async (req, res) => {
+// --- Step 1: hand the browser a presigned URL to upload the resume to MinIO -
+app.post("/api/uploads/presign", async (req, res) => {
   try {
-    const body = req.body as Record<string, string>;
+    const filename = str(req.body?.filename);
+    const contentType = str(req.body?.contentType);
+    if (!filename) return res.status(400).json({ error: "filename is required." });
+
+    const ext = extOf(filename);
+    if (!ALLOWED_EXT.includes(ext) && !ALLOWED_MIME.includes(contentType)) {
+      return res.status(400).json({ error: "Resume must be a PDF, DOC, or DOCX file." });
+    }
+
+    // Sanitise the name and give each upload a unique prefix.
+    const safeName = filename.replace(/[^\w.\-]+/g, "_").slice(-120);
+    const objectKey = `resumes/${randomUUID()}/${safeName}`;
+    const url = await presignUpload(objectKey);
+
+    res.json({ url, objectKey, expiresIn: config.presignExpirySeconds });
+  } catch (err) {
+    console.error("[uploads] presign failed:", err);
+    res.status(500).json({ error: "Could not create upload URL." });
+  }
+});
+
+// --- Step 2: create the application (JSON), referencing the uploaded object --
+app.post("/api/applications", async (req, res) => {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
 
     const fieldErrors = validateFields(body);
     if (Object.keys(fieldErrors).length > 0) {
@@ -85,18 +110,35 @@ app.post("/api/applications", upload.single("resume"), async (req, res) => {
         fields: fieldErrors,
       });
     }
-    if (!req.file) {
-      return res.status(400).json({ error: "Resume file is required." });
+
+    const resumeIn = body.resume as
+      | { objectKey?: string; originalName?: string; mimeType?: string }
+      | undefined;
+    const objectKey = str(resumeIn?.objectKey);
+    const originalName = str(resumeIn?.originalName);
+    if (!objectKey || !originalName) {
+      return res.status(400).json({ error: "Resume is required." });
     }
-    const ext = req.file.originalname.toLowerCase().slice(req.file.originalname.lastIndexOf("."));
-    if (!ALLOWED_EXT.includes(ext) && !ALLOWED_MIME.includes(req.file.mimetype)) {
-      return res.status(400).json({ error: "Resume must be a PDF, DOC, or DOCX file." });
+    if (!objectKey.startsWith("resumes/")) {
+      return res.status(400).json({ error: "Invalid resume reference." });
+    }
+
+    // Confirm the object was actually uploaded, and read its true size/type.
+    let size: number;
+    let mimeType: string;
+    try {
+      const stat = await statResume(objectKey);
+      size = stat.size;
+      mimeType = str(resumeIn?.mimeType) || stat.mimeType;
+    } catch {
+      return res.status(400).json({ error: "Resume upload not found. Please re-upload." });
+    }
+    if (size > config.maxUploadBytes) {
+      await removeResume(objectKey).catch(() => {});
+      return res.status(400).json({ error: "Resume exceeds the 10MB limit." });
     }
 
     const id = randomUUID();
-    const objectKey = `${id}/${req.file.originalname}`;
-    await putResume(objectKey, req.file.buffer, req.file.mimetype);
-
     const submission: Submission = {
       id,
       submittedAt: new Date().toISOString(),
@@ -111,12 +153,7 @@ app.post("/api/applications", upload.single("resume"), async (req, res) => {
       linkedin: str(body.linkedin),
       portfolio: str(body.portfolio),
       coverLetter: str(body.coverLetter),
-      resume: {
-        objectKey,
-        originalName: req.file.originalname,
-        mimeType: req.file.mimetype,
-        size: req.file.size,
-      },
+      resume: { objectKey, originalName, mimeType, size },
       meta: {
         ip: req.ip ?? "",
         userAgent: str(req.get("user-agent")),
@@ -148,25 +185,20 @@ app.get("/api/applications/:id", async (req, res) => {
   res.json(submission);
 });
 
-// --- Download / view the resume ------------------------------------------
+// --- View / download the resume (redirect to a presigned GET URL) --------
 app.get("/api/applications/:id/resume", async (req, res) => {
   const submission = await getSubmission(req.params.id);
   if (!submission?.resume) return res.status(404).json({ error: "Resume not found." });
-
-  const { originalName, mimeType, objectKey } = submission.resume;
-  const disposition = req.query.download === "1" ? "attachment" : "inline";
   try {
-    const stream = await getResumeStream(objectKey);
-    res.setHeader("Content-Type", mimeType);
-    res.setHeader(
-      "Content-Disposition",
-      `${disposition}; filename="${encodeURIComponent(originalName)}"`,
-    );
-    stream.on("error", () => res.status(500).end());
-    stream.pipe(res);
+    const url = await presignDownload(submission.resume.objectKey, {
+      fileName: submission.resume.originalName,
+      mimeType: submission.resume.mimeType,
+      download: req.query.download === "1",
+    });
+    res.redirect(url);
   } catch (err) {
-    console.error("[applications] resume fetch failed:", err);
-    res.status(500).json({ error: "Failed to fetch resume." });
+    console.error("[applications] resume presign failed:", err);
+    res.status(500).json({ error: "Failed to build resume link." });
   }
 });
 
@@ -184,18 +216,8 @@ app.delete("/api/applications/:id", async (req, res) => {
   }
 });
 
-// Multer / generic error handler (e.g. file too large).
-app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  if (err instanceof multer.MulterError) {
-    const msg = err.code === "LIMIT_FILE_SIZE" ? "File exceeds the 10MB limit." : err.message;
-    return res.status(400).json({ error: msg });
-  }
-  console.error(err);
-  res.status(500).json({ error: "Unexpected server error." });
-});
-
 async function main() {
-  await initStorage();
+  await initDb();
   await initMinio();
   app.listen(config.port, () => {
     console.log(`Server listening on port ${config.port}`);

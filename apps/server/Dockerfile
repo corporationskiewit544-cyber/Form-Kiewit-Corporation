@@ -18,8 +18,10 @@ FROM node:22-alpine AS runtime
 WORKDIR /app/apps/server
 ENV NODE_ENV=production
 
-# Hoisted workspace node_modules live at the repo root; Node resolves up to it.
+# Bun keeps the package store at the repo root (/app/node_modules/.bun) and puts
+# per-workspace symlinks in apps/server/node_modules — both are needed at runtime.
 COPY --from=build /app/node_modules /app/node_modules
+COPY --from=build /app/apps/server/node_modules ./node_modules
 COPY --from=build /app/apps/server/dist ./dist
 COPY --from=build /app/apps/server/package.json ./package.json
 

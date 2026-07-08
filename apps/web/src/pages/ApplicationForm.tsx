@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useRef, useState } from "react";
-import { submitApplication } from "../lib/api";
+import { presignResume, submitApplication, uploadToStorage } from "../lib/api";
 
 const EXPERIENCE = ["0-1", "1-3", "3-5", "5-7", "7-10", "10+"];
 const NOTICE = ["Immediate", "15 Days", "30 Days", "45 Days", "60 Days", "90 Days"];
@@ -275,11 +275,35 @@ export default function ApplicationForm() {
       return;
     }
 
+    const resumeFile = file as File;
     setSubmitting(true);
     try {
-      const data = new FormData(e.currentTarget);
-      data.set("resume", file as File, (file as File).name);
-      await submitApplication(data);
+      // 1) upload the resume straight to MinIO via a presigned URL
+      const { url, objectKey } = await presignResume(resumeFile);
+      await uploadToStorage(url, resumeFile);
+
+      // 2) submit the rest of the form as JSON, referencing the uploaded object
+      //    (use the ref, not e.currentTarget — React nulls it after the await above)
+      const fd = new FormData(formRef.current!);
+      const get = (k: string) => String(fd.get(k) ?? "").trim();
+      await submitApplication({
+        fullName: get("fullName"),
+        email: get("email"),
+        phone: get("phone"),
+        company: get("company"),
+        experience: get("experience"),
+        notice: get("notice"),
+        currentCtc: get("currentCtc"),
+        expectedCtc: get("expectedCtc"),
+        linkedin: get("linkedin"),
+        portfolio: get("portfolio"),
+        coverLetter: get("coverLetter"),
+        resume: {
+          objectKey,
+          originalName: resumeFile.name,
+          mimeType: resumeFile.type || "application/octet-stream",
+        },
+      });
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {

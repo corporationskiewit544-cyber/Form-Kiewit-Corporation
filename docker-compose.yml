@@ -1,4 +1,17 @@
 services:
+  # PostgreSQL — source of truth for submissions (full payload kept as JSONB).
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kiewit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kiewit}
+      POSTGRES_DB: ${POSTGRES_DB:-kiewit}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
   # S3-compatible object storage for resume files.
   minio:
     image: minio/minio:latest
@@ -6,31 +19,39 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+      # Allow the browser to PUT/GET directly via presigned URLs.
+      MINIO_API_CORS_ALLOW_ORIGIN: ${MINIO_CORS_ORIGIN:-*}
     ports:
-      - "9000:9000" # S3 API
+      - "9000:9000" # S3 API (also the public host for presigned URLs)
       - "9001:9001" # Web console -> http://localhost:9001
     volumes:
       - minio-data:/data
     restart: unless-stopped
 
-  # Express API: validates + stores submissions as JSON, resumes in MinIO.
+  # Express API: presigns uploads, validates, and persists to Postgres.
   server:
     build:
       context: .
       dockerfile: apps/server/Dockerfile
     environment:
       PORT: "3001"
-      DATA_DIR: /data/submissions
+      DATABASE_URL: postgres://${POSTGRES_USER:-kiewit}:${POSTGRES_PASSWORD:-kiewit}@postgres:5432/${POSTGRES_DB:-kiewit}
       MAX_UPLOAD_BYTES: "10485760"
+      MINIO_PRESIGN_EXPIRY: "300"
+      # Internal endpoint (server -> MinIO on the compose network).
       MINIO_ENDPOINT: minio
       MINIO_PORT: "9000"
       MINIO_USE_SSL: "false"
+      # Public endpoint baked into presigned URLs (must be reachable by the browser).
+      # For a real deployment set these to your public MinIO host/domain.
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-localhost}
+      MINIO_PUBLIC_PORT: ${MINIO_PUBLIC_PORT:-9000}
+      MINIO_PUBLIC_USE_SSL: ${MINIO_PUBLIC_USE_SSL:-false}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
       MINIO_BUCKET: ${MINIO_BUCKET:-kiewit-resumes}
-    volumes:
-      - submissions-data:/data/submissions
     depends_on:
+      - postgres
       - minio
     ports:
       - "3001:3001"
@@ -48,5 +69,5 @@ services:
     restart: unless-stopped
 
 volumes:
+  postgres-data:
   minio-data:
-  submissions-data:
