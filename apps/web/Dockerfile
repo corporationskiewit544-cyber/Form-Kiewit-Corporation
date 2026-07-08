@@ -13,7 +13,8 @@ RUN cd apps/web && bun run build
 
 # --- runtime stage (nginx serves the SPA and proxies /api) ---------------
 FROM nginx:alpine AS runtime
-COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+ENV NGINX_API_URL=http://server:3001
+COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf.template
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/bin/sh", "-c", "envsubst '${NGINX_API_URL}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]
