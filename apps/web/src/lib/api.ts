@@ -1,3 +1,5 @@
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
+
 export interface ResumeMeta {
   objectKey: string;
   originalName: string;
@@ -33,7 +35,7 @@ export type ApplicationPayload = Omit<
 export async function presignResume(
   file: File,
 ): Promise<{ url: string; objectKey: string; expiresIn: number }> {
-  const res = await fetch("/api/uploads/presign", {
+  const res = await fetch(`${API_BASE}/api/uploads/presign`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ filename: file.name, contentType: file.type }),
@@ -45,7 +47,8 @@ export async function presignResume(
 
 /** Upload the file directly to MinIO using the presigned PUT URL. */
 export async function uploadToStorage(url: string, file: File): Promise<void> {
-  const res = await fetch(url, {
+  const uploadUrl = url.startsWith("/") ? `${API_BASE}${url}` : url;
+  const res = await fetch(uploadUrl, {
     method: "PUT",
     headers: file.type ? { "Content-Type": file.type } : undefined,
     body: file,
@@ -56,7 +59,7 @@ export async function uploadToStorage(url: string, file: File): Promise<void> {
 export async function submitApplication(
   payload: ApplicationPayload,
 ): Promise<{ ok: true; id: string }> {
-  const res = await fetch("/api/applications", {
+  const res = await fetch(`${API_BASE}/api/applications`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -67,15 +70,15 @@ export async function submitApplication(
 }
 
 export async function fetchApplications(): Promise<Submission[]> {
-  const res = await fetch("/api/applications");
+  const res = await fetch(`${API_BASE}/api/applications`);
   if (!res.ok) throw new Error("Failed to load applications.");
   return res.json();
 }
 
 export async function deleteApplication(id: string): Promise<void> {
-  const res = await fetch(`/api/applications/${id}`, { method: "DELETE" });
+  const res = await fetch(`${API_BASE}/api/applications/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete application.");
 }
 
 export const resumeUrl = (id: string, download = false) =>
-  `/api/applications/${id}/resume${download ? "?download=1" : ""}`;
+  `${API_BASE}/api/applications/${id}/resume${download ? "?download=1" : ""}`;

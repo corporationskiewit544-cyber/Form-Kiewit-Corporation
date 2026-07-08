@@ -19,7 +19,7 @@ import {
 import type { Submission } from "./types.js";
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: config.corsOrigin }));
 app.use(express.json({ limit: "256kb" }));
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");

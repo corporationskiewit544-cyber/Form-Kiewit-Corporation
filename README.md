@@ -43,6 +43,9 @@ docker compose up --build
 | PostgreSQL     | localhost:5432                  |
 | MinIO console  | http://localhost:9001           |
 
+The built SPA calls the API directly at `VITE_API_URL` (set at build time; see
+`.env.example`). nginx no longer reverse-proxies `/api`.
+
 Data persists in the `postgres-data` and `minio-data` Docker volumes.
 
 > **Presigned URLs & the public host:** presigned URLs must point at a MinIO host the
@@ -60,14 +63,16 @@ bun install
 bun run dev                             # web on :3000, server on :3001
 ```
 
-The Vite dev server proxies `/api` → `http://localhost:3001`.
+The Vite dev server proxies `/api` → `http://localhost:3001`. Set `VITE_API_URL`
+to make the SPA call the API directly instead (used in the Docker build).
 
 ## Configuration
 
 Env-driven (see `.env.example` and `apps/server/src/config.ts`): `PORT`, `DATABASE_URL`,
-`MAX_UPLOAD_BYTES`, `MINIO_PRESIGN_EXPIRY`, the `MINIO_*` (internal) and
-`MINIO_PUBLIC_*` (browser-facing) variables. For production use strong DB and MinIO
-credentials.
+`MAX_UPLOAD_BYTES`, `MINIO_PRESIGN_EXPIRY`, `CORS_ORIGIN`, the `MINIO_*` (internal)
+and `MINIO_PUBLIC_*` (browser-facing) variables, and `VITE_API_URL` (web build-time
+API base URL). For production use strong DB and MinIO credentials and set `CORS_ORIGIN`
+to the web origin.
 
 ## API
 

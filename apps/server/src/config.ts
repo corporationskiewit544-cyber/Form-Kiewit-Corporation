@@ -11,6 +11,9 @@ const useSSL = bool(process.env.MINIO_USE_SSL, false);
 export const config = {
   port: num(process.env.PORT, 3001),
 
+  // Allow-list for CORS. Defaults to "*" for local dev; set to the web origin in production.
+  corsOrigin: process.env.CORS_ORIGIN ?? "*",
+
   // Postgres is the source of truth. Full submission payload is stored as JSONB.
   databaseUrl:
     process.env.DATABASE_URL ?? "postgres://kiewit:kiewit@localhost:5432/kiewit",

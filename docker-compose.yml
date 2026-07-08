@@ -35,6 +35,8 @@ services:
       dockerfile: apps/server/Dockerfile
     environment:
       PORT: "3001"
+      # Allow the browser at this origin to call the API directly. Defaults to "*".
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
       DATABASE_URL: postgres://${POSTGRES_USER:-kiewit}:${POSTGRES_PASSWORD:-kiewit}@postgres:5432/${POSTGRES_DB:-kiewit}
       MAX_UPLOAD_BYTES: "10485760"
       MINIO_PRESIGN_EXPIRY: "300"
@@ -57,11 +59,13 @@ services:
       - "3001:3001"
     restart: unless-stopped
 
-  # Nginx: serves the built React SPA and reverse-proxies /api -> server.
+  # Nginx: serves the built React SPA. The browser calls the API directly via VITE_API_URL.
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
     ports:
       - "3000:80" # App -> http://localhost:3000
     depends_on:

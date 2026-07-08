@@ -9,13 +9,15 @@ RUN bun install --frozen-lockfile
 
 COPY tsconfig.json tsconfig.json
 COPY apps/web ./apps/web
+
+ARG VITE_API_URL=http://localhost:3001
+ENV VITE_API_URL=${VITE_API_URL}
 RUN cd apps/web && bun run build
 
-# --- runtime stage (nginx serves the SPA and proxies /api) ---------------
+# --- runtime stage (nginx serves the SPA only) ---------------------------
 FROM nginx:alpine AS runtime
-ENV NGINX_API_URL=http://server:3001
-COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf.template
+COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 80
 
-CMD ["/bin/sh", "-c", "envsubst '${NGINX_API_URL}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]
+CMD ["nginx", "-g", "daemon off;"]
