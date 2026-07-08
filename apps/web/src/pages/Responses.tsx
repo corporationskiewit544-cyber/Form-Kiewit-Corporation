@@ -83,7 +83,6 @@ function exportCsv(rows: Submission[]) {
     "currentCtc",
     "expectedCtc",
     "linkedin",
-    "portfolio",
     "coverLetter",
   ];
   const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -182,8 +181,8 @@ export default function Responses() {
       <header className="sticky top-0 z-20 border-b border-gray-200 bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500 text-lg font-black text-gray-900">
-              K
+            <div className="flex h-9 w-9 items-center justify-center rounded-full overflow-hidden bg-black">
+              <img src="/logo.png" alt="Kiewit" className="h-full w-full object-cover" />
             </div>
             <div>
               <h1 className="text-sm font-bold leading-tight text-gray-900 sm:text-base">
@@ -469,13 +468,6 @@ function DetailDrawer({
               icon={<Linkedin className="h-4 w-4" />}
               label="LinkedIn"
               value={<a className="text-brand-700 hover:underline" href={s.linkedin} target="_blank" rel="noreferrer">{s.linkedin}</a>}
-            />
-          )}
-          {s.portfolio && (
-            <DetailRow
-              icon={<ExternalLink className="h-4 w-4" />}
-              label="Portfolio"
-              value={<a className="text-brand-700 hover:underline" href={s.portfolio} target="_blank" rel="noreferrer">{s.portfolio}</a>}
             />
           )}
 

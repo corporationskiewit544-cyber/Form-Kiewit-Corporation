@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   Clock,
   FileText,
-  Globe,
   IndianRupee,
   Linkedin,
   Loader2,
@@ -33,7 +32,6 @@ const FIELD_NAMES = [
   "currentCtc",
   "expectedCtc",
   "linkedin",
-  "portfolio",
   "coverLetter",
 ] as const;
 
@@ -86,10 +84,6 @@ function fieldError(name: string, raw: string): string {
       if (!v) return "LinkedIn profile is required.";
       if (!isValidUrl(v)) return "Enter a valid URL (https://…).";
       if (!/linkedin\./i.test(v)) return "Enter a LinkedIn profile URL.";
-      return "";
-    case "portfolio":
-      if (!v) return "Portfolio / website is required.";
-      if (!isValidUrl(v)) return "Enter a valid URL (https://…).";
       return "";
     case "coverLetter":
       if (!v) return "Cover letter is required.";
@@ -296,7 +290,6 @@ export default function ApplicationForm() {
         currentCtc: get("currentCtc"),
         expectedCtc: get("expectedCtc"),
         linkedin: get("linkedin"),
-        portfolio: get("portfolio"),
         coverLetter: get("coverLetter"),
         resume: {
           objectKey,
@@ -327,8 +320,8 @@ export default function ApplicationForm() {
         {/* Header */}
         <header className="mb-8 text-center">
           <div className="mb-3 inline-flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-md bg-brand-500 text-xl font-bold text-gray-900">
-              K
+            <div className="flex h-11 w-11 items-center justify-center rounded-full overflow-hidden bg-black">
+              <img src="/logo.png" alt="Kiewit" className="h-full w-full object-cover" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
               Kiewit Corporation
@@ -606,21 +599,6 @@ export default function ApplicationForm() {
                         name="linkedin"
                         type="url"
                         placeholder="https://linkedin.com/in/..."
-                      />
-                    </Field>
-                    <Field
-                      label="Portfolio / Website"
-                      htmlFor="portfolio"
-                      required
-                      error={errors.portfolio}
-                    >
-                      <TextInput
-                        icon={<Globe className="h-4 w-4" />}
-                        invalid={!!errors.portfolio}
-                        id="portfolio"
-                        name="portfolio"
-                        type="url"
-                        placeholder="https://..."
                       />
                     </Field>
                   </div>

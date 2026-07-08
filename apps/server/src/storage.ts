@@ -10,8 +10,8 @@ export async function saveSubmission(s: Submission): Promise<void> {
   await pool.query(
     `INSERT INTO submissions
        (id, submitted_at, full_name, email, phone, company, experience, notice,
-        current_ctc, expected_ctc, linkedin, portfolio, cover_letter, resume, raw)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+        current_ctc, expected_ctc, linkedin, cover_letter, resume, raw)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
     [
       s.id,
       s.submittedAt,
@@ -24,7 +24,6 @@ export async function saveSubmission(s: Submission): Promise<void> {
       s.currentCtc,
       s.expectedCtc,
       s.linkedin,
-      s.portfolio,
       s.coverLetter,
       s.resume ? JSON.stringify(s.resume) : null,
       JSON.stringify(s),

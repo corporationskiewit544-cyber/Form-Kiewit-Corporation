@@ -27,7 +27,6 @@ export interface Submission {
 
   // Additional
   linkedin: string;
-  portfolio: string;
   coverLetter: string;
 
   resume: ResumeMeta | null;

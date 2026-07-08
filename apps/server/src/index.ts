@@ -52,7 +52,6 @@ const REQUIRED_FIELDS = [
   "currentCtc",
   "expectedCtc",
   "linkedin",
-  "portfolio",
   "coverLetter",
 ] as const;
 
@@ -66,7 +65,6 @@ function validateFields(b: Record<string, unknown>): Record<string, string> {
   const digits = (str(b.phone).match(/\d/g) ?? []).length;
   if (str(b.phone) && (digits < 7 || digits > 15)) errs.phone = "Invalid phone number.";
   if (str(b.linkedin) && !isUrl(str(b.linkedin))) errs.linkedin = "Invalid URL.";
-  if (str(b.portfolio) && !isUrl(str(b.portfolio))) errs.portfolio = "Invalid URL.";
   return errs;
 }
 
@@ -151,7 +149,6 @@ app.post("/api/applications", async (req, res) => {
       currentCtc: str(body.currentCtc),
       expectedCtc: str(body.expectedCtc),
       linkedin: str(body.linkedin),
-      portfolio: str(body.portfolio),
       coverLetter: str(body.coverLetter),
       resume: { objectKey, originalName, mimeType, size },
       meta: {

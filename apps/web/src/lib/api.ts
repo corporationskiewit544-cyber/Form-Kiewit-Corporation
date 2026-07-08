@@ -17,7 +17,6 @@ export interface Submission {
   currentCtc: string;
   expectedCtc: string;
   linkedin: string;
-  portfolio: string;
   coverLetter: string;
   resume: ResumeMeta | null;
   meta: { ip: string; userAgent: string };
