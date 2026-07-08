@@ -25,5 +25,8 @@ COPY --from=build /app/apps/server/node_modules ./node_modules
 COPY --from=build /app/apps/server/dist ./dist
 COPY --from=build /app/apps/server/package.json ./package.json
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:3001/api/health || exit 1
+
 EXPOSE 3001
 CMD ["node", "dist/index.js"]
